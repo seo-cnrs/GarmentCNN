@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # copy and extract                 
     folders = [x[0] for x in os.walk(path)][1:]
     for i, folder in enumerate(folders) :
-        if i == nb_samples:
+        if i == int(nb_samples):
             break
         print(folder)
         

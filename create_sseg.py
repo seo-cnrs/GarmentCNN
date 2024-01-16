@@ -115,9 +115,9 @@ def get_obj(file):
 
 
 def create_files(path):
-    print("path", glob.glob(os.path.join(path, 'train/*.obj')))
+    #print("path", glob.glob(os.path.join(path, 'train/*.obj')))
     for filename in glob.glob(os.path.join(path, 'train/*.obj')):
-        print(filename)
+        #print(filename)
         basename = os.path.splitext(os.path.basename(filename))[0]
         print(basename)
         label_name = os.path.join(os.path.join(path, 'seg'), basename + '.eseg')
@@ -129,7 +129,7 @@ def create_files(path):
 
         if os.path.isfile(label_name):
             labels = load_labels(label_name)
-            print(len(labels))
+            #print(len(labels))
             create_sseg_file(gemms, labels, export_name_seseg)
         else:
             print(label_name, "is no directory")
@@ -137,3 +137,4 @@ def create_files(path):
 
 if __name__ == '__main__':
     create_files(sys.argv[1])
+    print("done")

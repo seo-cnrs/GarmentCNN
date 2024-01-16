@@ -94,7 +94,7 @@ def get_gemm_edges(faces, export_name_edges):
     return gemm_edges, edges, edge2key
     
 
-def get_loop_verts_labels(idx,edges,gemm_edges,segments):
+def get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels):
         abcd=gemm_edges[idx]
         verts=[]
         for id_e in abcd: # four edge index
@@ -107,6 +107,14 @@ def get_loop_verts_labels(idx,edges,gemm_edges,segments):
 
         if -1 in labels:
             labels.remove(-1)
+            
+            
+        if len(labels)==0: # fail safe, TODO: urgent!!! find a more solid way
+            for eg_id in abcd:
+                if edgeLabels[eg_id]!=999: 
+                    labels=[edgeLabels[eg_id]]
+                    break
+            
         return labels
 
 
@@ -174,7 +182,7 @@ def create_eseg_file(verts, edges, segments, gemm_edges, edge2key, export_name_e
             edgeLabels[idx]= l0 # take any one of it
         else:
             # here are both are -1, so is the stitch
-            labels=get_loop_verts_labels(idx,edges,gemm_edges,segments)
+            labels=get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels)
             
             if len(labels)==2: # plain stitch
                 edgeLabels[idx]= min(labels) #TODO: decide the rule then
@@ -215,8 +223,8 @@ def create_eseg_file(verts, edges, segments, gemm_edges, edge2key, export_name_e
                  edgeLabels[idx]=get_adjedge_label(edge[0],solved_seams, edge2key, edgeLabels)
             # case 2, no join
             else:
-                labels=get_loop_verts_labels(idx,edges,gemm_edges,segments)    
-                assert(len(labels)==1)
+                labels=get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels)    
+                #assert(len(labels)==1)   #TODO: robust
                 edgeLabels[idx]=list(labels)[0]    
     
     np.savetxt(export_name_eseg, edgeLabels,  fmt='%s')
