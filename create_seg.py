@@ -10,13 +10,13 @@ import os
 #from collections import OrderedDict
 import numpy as np
 import networkx as nx
+from tqdm import tqdm
 
 import sys
 import glob
 
 
 def get_obj(file):
-    #mesh=trimesh.load("tee_0ADQ2LDQJA_sim_3D.obj",process=False)
     mesh=trimesh.load(file, process=False)
 
     faces=mesh.faces
@@ -94,7 +94,7 @@ def get_gemm_edges(faces, export_name_edges):
     return gemm_edges, edges, edge2key
     
 
-def get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels):
+def get_loop_verts_labels(idx,edges,gemm_edges,segments): #, edgeLabels):
         abcd=gemm_edges[idx]
         verts=[]
         for id_e in abcd: # four edge index
@@ -108,13 +108,13 @@ def get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels):
         if -1 in labels:
             labels.remove(-1)
             
-            
+        """   
         if len(labels)==0: # fail safe, TODO: urgent!!! find a more solid way
             for eg_id in abcd:
                 if edgeLabels[eg_id]!=999: 
                     labels=[edgeLabels[eg_id]]
                     break
-            
+        """    
         return labels
 
 
@@ -151,19 +151,42 @@ def group_edges(mixed_edges):
 
     return group_info
 
-def angle_at_vertex(vertices, vertex_index):
-    A, B, C = vertices[vertex_index], vertices[(vertex_index + 1) % 3], vertices[(vertex_index + 2) % 3]
-    AB, AC = B - A, C - A
-    return np.degrees(np.arccos(np.clip(np.dot(AB, AC) / (np.linalg.norm(AB) * np.linalg.norm(AC)), -1.0, 1.0)))
 
-def find_vertex_with_largest_angle(vertices):
-    angles = [angle_at_vertex(vertices, i) for i in range(3)]
-    return np.argmax(angles)
+def count_occurrences_in_numpy_array(element, array_2d):
+    return np.count_nonzero(array_2d == element)
 
+def find_other_element(array, known_element):
+    # Find the row index where known_element is present
+    row_index = np.where(array == known_element)[0]
+
+    # If the element is not found, return None
+    if row_index.size == 0:
+        return None
+
+    # Assuming known_element appears only once, get the other element
+    # We use [0] to get the first occurrence if there are multiple
+    other_index = 1 if array[row_index[0], 0] == known_element else 0
+    return array[row_index[0], other_index]
+
+def index_of_smaller_angle(reference_vector, vector1, vector2):
+    vectors = [vector1, vector2]
+    angles = [np.arccos(np.clip(np.dot(reference_vector, v) / (np.linalg.norm(reference_vector) * np.linalg.norm(v)), -1.0, 1.0)) for v in vectors]
+
+    return angles.index(min(angles))
+
+def unique_sot_desc(arr):
+    # Get unique elements and their counts, then sort them by counts in descending order
+    unique_elements, counts = np.unique(arr, return_counts=True)
+    sorted_indices = np.argsort(counts)[::-1]
+    # sort both descending
+    sorted_unique_elements = unique_elements[sorted_indices]
+    sorted_counts = counts[sorted_indices]
+    
+    return sorted_unique_elements, sorted_counts
 
 
 def create_eseg_file(verts, edges, segments, gemm_edges, edge2key, export_name_eseg):
-    # naive seg labels
+
     edgeLabels = np.ones(len(edges), dtype=int)*999
     solved_seams=[]
     tosolve_seams=[]
@@ -182,38 +205,55 @@ def create_eseg_file(verts, edges, segments, gemm_edges, edge2key, export_name_e
             edgeLabels[idx]= l0 # take any one of it
         else:
             # here are both are -1, so is the stitch
-            labels=get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels)
+            labels=get_loop_verts_labels(idx,edges,gemm_edges,segments)
             
             if len(labels)==2: # plain stitch
-                edgeLabels[idx]= min(labels) #TODO: decide the rule then
+                edgeLabels[idx]= min(labels) #min or max, depending on the order
                 solved_seams.append(edge)
             else: # only one none -1 label left or even empty
                 tosolve_seams.append(edge)
                 
     #print("tosolve_seams", tosolve_seams)            
     if tosolve_seams:
-        tosolve_verts=np.array(tosolve_seams).reshape(-1)
-        unique_elements, counts = np.unique(tosolve_verts, return_counts=True)
-        
+
         around_join = group_edges(tosolve_seams)
         join=[]
         
         for verts_involved, edges_involved, nb_e, triangles in around_join:
-            # TODO, add a link to an image of all the cases
-            if nb_e==5 or nb_e==3:
+            # TODO, add a link to an image of all the following cases
+            if nb_e==3:
                 triangle=triangles[0]
-                #print(triangle)
-                triangle_vertices= verts[np.array(triangle)]
-                vertex_with_largest_angle = find_vertex_with_largest_angle(triangle_vertices)
-                join.append(triangle[vertex_with_largest_angle])
+                for v in triangle:
+                     count=np.count_nonzero(np.array(solved_seams) == v) 
+                     if count==2:
+                         join.append(v)
+                         break
+            elif nb_e==5:  
+                unique_elements, counts=unique_sot_desc(np.array(edges_involved))
+                
+                assert(len(unique_elements)==4)
+                #print(unique_elements, counts)
+                v0=unique_elements[0]
+                v1=unique_elements[1]
+                
+                v2=unique_elements[2]
+                
+                vec0=verts[v2]-verts[v0]
+                vec1=verts[v2]-verts[v1]
+                # this is based on the fact that the stitch lines are locally straight  
+                v=find_other_element(np.array(solved_seams), v2)
+                v_ref=verts[v]-verts[v2]
+                inx=index_of_smaller_angle(v_ref, vec0, vec1)
+                join.append(unique_elements[inx])
+                
             elif nb_e==8 or nb_e==7 or nb_e==6:
-                unique_elements, counts = np.unique(np.array(edges_involved).reshape(-1), return_counts=True)
-                join.append(unique_elements[0])
+                unique_elements, counts=unique_sot_desc(np.array(edges_involved))
+                join.append(unique_elements[0]) # the vertex apprears most often
             else:
                 print("unexpected case")
-            
         #print("join points",join)
         
+        # handle the to be solve edges aroud join point, two types
         for edge in tosolve_seams:
             idx=edge2key[tuple(edge)] 
             # case 1, edge has one vertext is the join point
@@ -221,10 +261,10 @@ def create_eseg_file(verts, edges, segments, gemm_edges, edge2key, export_name_e
                  edgeLabels[idx]= get_adjedge_label(edge[1],solved_seams, edge2key, edgeLabels)        
             elif edge[1] in join: 
                  edgeLabels[idx]=get_adjedge_label(edge[0],solved_seams, edge2key, edgeLabels)
-            # case 2, no join
+            # case 2
             else:
-                labels=get_loop_verts_labels(idx,edges,gemm_edges,segments, edgeLabels)    
-                #assert(len(labels)==1)   #TODO: robust
+                labels=get_loop_verts_labels(idx,edges,gemm_edges,segments)    
+                assert(len(labels)==1)   # robustness
                 edgeLabels[idx]=list(labels)[0]    
     
     np.savetxt(export_name_eseg, edgeLabels,  fmt='%s')
@@ -238,7 +278,7 @@ def create_files(path, simplified=False):
         os.makedirs(os.path.join(path,"sseg"))
     
     #print(path)
-    for filename in glob.glob(os.path.join(path, 'train/*.obj')):
+    for filename in tqdm(glob.glob(os.path.join(path, 'train/*.obj'))):
         #print("name: ",filename)
         basename = os.path.splitext(os.path.basename(filename))[0]
         print(basename)
