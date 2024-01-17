@@ -7,6 +7,7 @@ This guide outlines the steps for preparing a dataset for GarmentCNN.
 ## Step 1: Copy and Clean up Mesh
 
 Copy and paste mesh files in obj and segmentation files in '.txt'(per vertex label) from Maria's dataset(https://zenodo.org/records/5267549).
+Clean up, that is to say, remove unnecessary information from '.obj' files. 
 
 ```bash
 python extract_objseg.py InputFolder OutputFolder NumberOfInstancesToGet
