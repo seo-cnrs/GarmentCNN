@@ -40,4 +40,16 @@ python create_sseg.py Folder
 # Example:
 python create_sseg.py ./tee_samples
 ```
+## Utils: User intervention
+In the original dataset, some failure simulation cases exist and the number of edges might vary a lot for certain garments. Therefore, some manual intervention is still needed sometimes. Below are some utils to assist the user to perform this efficiently/debug.
+
+```bash
+python take_image.py
+# Example:
+python take_img.py ./tee_test ./tee_1_imgs 1
+
+# run use IDE:
+python filter_objseg.py
+python zoom_in_join.py
+```
 
